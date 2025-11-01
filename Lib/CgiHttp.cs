@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -16,29 +17,30 @@ public record CgiExecutionInfo(
     Dictionary<string, string>? EnvironmentUpdate = null
 );
 
-public interface ICgiHttpContext
+public abstract class CgiHttpContext
 {
-    HttpContext HttpContext { get; set; }
+    [AllowNull]
+    public HttpContext HttpContext { get; set; }
 
-    bool LogErrorOutput
+    public bool LogErrorOutput
     {
         get => false;
     }
 
-    TimeSpan ProcessingTimeout
+    public TimeSpan ProcessingTimeout
     {
         get => TimeSpan.FromSeconds(3);
     }
 
-    CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger);
+    public abstract CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger);
 }
 
 public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplication<TContext>
-    where TContext : ICgiHttpContext, new()
+    where TContext : CgiHttpContext, new()
 {
     const string CgiVersion11 = "CGI/1.1";
     static readonly string CgiServerSoftware =
-        typeof(ICgiHttpContext).Assembly.GetName().Name ?? "Unknown";
+        typeof(CgiHttpContext).Assembly.GetName().Name ?? "Unknown";
 
     public TContext CreateContext(IFeatureCollection contextFeatures)
     {

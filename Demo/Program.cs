@@ -1,5 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using KestrelCgi;
+﻿using KestrelCgi;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets;
@@ -33,12 +32,9 @@ await server.StartAsync(cgiHttp, CancellationToken.None);
 await shutDown.Task;
 await server.StopAsync(CancellationToken.None);
 
-class GitHttpBackendContext : ICgiHttpContext
+class GitHttpBackendContext : CgiHttpContext
 {
-    [AllowNull]
-    public HttpContext HttpContext { get; set; }
-
-    public CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger)
+    public override CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger)
     {
         var request = HttpContext.Request;
 

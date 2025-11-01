@@ -4,9 +4,7 @@ KestrelCgi implements a simple CGI server directly on top of Kestrel.
 
 ## How it works
 
-KestrelCgi provides an abstract class `CgiHttpContext`, which can be de
-
-Derive from the abstract class `CgiHttpContext` and implement `GetCgiExecutionInfo` to provide `CgiExecutionInfo` to the base. `CgiExecutionInfo` gives necessary information on how to execute a CGI program.
+Derive from the abstract class `CgiHttpContext` and implement `GetCgiExecutionInfo` to provide `CgiExecutionInfo` to `CgiHttpContext`. `CgiExecutionInfo` gives necessary information on how to execute a CGI program.
 
 Here is an example from See [Demo\Program.cs]:
 

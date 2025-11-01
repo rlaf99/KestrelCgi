@@ -2,6 +2,12 @@ using Microsoft.Extensions.Logging;
 
 namespace KestrelCgi;
 
+public class InvalidCgiOutputException : Exception
+{
+    public InvalidCgiOutputException(string? message)
+        : base(message) { }
+}
+
 public class CgiHeaders
 {
     const string ContentTypeLineStart = "Content-Type:";
@@ -25,7 +31,7 @@ public class CgiHeaders
         {
             if (ContentType is not null)
             {
-                throw new InvalidDataException($"{nameof(ContentType)} already present");
+                throw new InvalidCgiOutputException($"{nameof(ContentType)} already present");
             }
             ContentType = line[ContentTypeLineStart.Length..].TrimStart();
 
@@ -35,7 +41,7 @@ public class CgiHeaders
         {
             if (Location is not null)
             {
-                throw new InvalidDataException($"{nameof(Location)} already present");
+                throw new InvalidCgiOutputException($"{nameof(Location)} already present");
             }
             Location = line[LocationLineStart.Length..].TrimStart();
 
@@ -45,14 +51,13 @@ public class CgiHeaders
         {
             if (Status is not null)
             {
-                throw new InvalidDataException($"{nameof(Status)} already present");
+                throw new InvalidCgiOutputException($"{nameof(Status)} already present");
             }
-            if (
-                int.TryParse(line[StatusLineStart.Length..].TrimStart(), out var statusCode)
-                == false
-            )
+            var statusInfo = line[StatusLineStart.Length..].TrimStart();
+            var statusCodeInfo = statusInfo.Split(' ')[0];
+            if (int.TryParse(statusCodeInfo, out var statusCode) == false)
             {
-                throw new InvalidDataException($"Invalid {line}");
+                throw new InvalidCgiOutputException($"Invalid {line}");
             }
             Status = statusCode;
 

@@ -30,7 +30,6 @@ var cgiHttpLogger = loggerFactory.CreateLogger<CgiHttpApplication<GitHttpBackend
 CgiHttpApplication<GitHttpBackendContext> cgiHttp = new(cgiHttpLogger);
 
 await server.StartAsync(cgiHttp, CancellationToken.None);
-
 await shutDown.Task;
 await server.StopAsync(CancellationToken.None);
 
@@ -42,7 +41,6 @@ class GitHttpBackendContext : ICgiHttpContext
     public CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger)
     {
         var request = HttpContext.Request;
-        var envUpdate = new Dictionary<string, string> { { "FOO", "BAR" } };
 
         if (request.Path == @"/env.bat")
         {
@@ -50,17 +48,20 @@ class GitHttpBackendContext : ICgiHttpContext
                 ScriptName: "env.bat",
                 PathInfo: "",
                 CommandPath: Path.Join(".", "script", "env.bat"),
-                CommandArgs: [],
-                EnvironmentUpdate: envUpdate
+                CommandArgs: []
             );
 
             return result;
         }
-        else if (request.Path == @"/env.fsx")
+        else if (request.Path.StartsWithSegments(@"/env.fsx"))
         {
+            const string scriptName = "/env.fsx";
+            var pathInfo = request.Path.Value![scriptName.Length..];
+            var envUpdate = new Dictionary<string, string> { { "FOO", "BAR" } };
+
             CgiExecutionInfo result = new(
                 ScriptName: "env.fsx",
-                PathInfo: "",
+                PathInfo: pathInfo,
                 CommandPath: "dotnet",
                 CommandArgs: ["fsi", Path.Join(".", "script", "env.fsx")],
                 EnvironmentUpdate: envUpdate

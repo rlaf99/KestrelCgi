@@ -7,17 +7,12 @@ using static KestrelCgi.CgiRequestConstants;
 
 namespace KestrelCgi;
 
-public class InvalidCgiOutputException : Exception
-{
-    public InvalidCgiOutputException(string? message)
-        : base(message) { }
-}
-
 public record CgiExecutionInfo(
     string ScriptName,
     string PathInfo,
     string CommandPath,
     List<string> CommandArgs,
+    string? PathTranslated = null,
     Dictionary<string, string>? EnvironmentUpdate = null
 );
 
@@ -164,8 +159,10 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
             env[REQUEST_METHOD] = request.Method;
             env[SCRIPT_NAME] = cgiExecInfo.ScriptName;
             env[PATH_INFO] = cgiExecInfo.PathInfo;
-            env[PATH_TRANSLATED] = null;
-            env[QUERY_STRING] = request.QueryString.Value;
+            env[PATH_TRANSLATED] = cgiExecInfo.PathTranslated;
+            env[QUERY_STRING] = request.QueryString.HasValue
+                ? request.QueryString.Value["?".Length..]
+                : null;
             env[CONTENT_TYPE] = request.ContentType;
             env[CONTENT_LENGTH] = request.ContentLength.ToString();
 
@@ -274,7 +271,7 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
         }
 
         var name = line[..colonIndex];
-        var value = line[(colonIndex + 1)..];
+        var value = line[(colonIndex + 1)..].TrimStart();
 
         return (name, value);
     }

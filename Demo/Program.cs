@@ -25,14 +25,14 @@ var server = new KestrelServer(
     loggerFactory
 );
 
-var cgiHttpLogger = loggerFactory.CreateLogger<CgiHttpApplication<GitHttpBackendContext>>();
-CgiHttpApplication<GitHttpBackendContext> cgiHttp = new(cgiHttpLogger);
+var cgiHttpLogger = loggerFactory.CreateLogger<CgiHttpApplication<ExampleCgiContext>>();
+CgiHttpApplication<ExampleCgiContext> cgiHttp = new(cgiHttpLogger);
 
 await server.StartAsync(cgiHttp, CancellationToken.None);
 await shutDown.Task;
 await server.StopAsync(CancellationToken.None);
 
-class GitHttpBackendContext : CgiHttpContext
+class ExampleCgiContext : CgiHttpContext
 {
     public override CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger)
     {

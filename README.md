@@ -8,7 +8,7 @@ KestrelCgi provides an abstract class `CgiHttpContext`, which can be de
 
 Derive from the abstract class `CgiHttpContext` and implement `GetCgiExecutionInfo` to provide `CgiExecutionInfo` to the base. `CgiExecutionInfo` gives necessary information on how to execute a CGI program.
 
-Here is an example:
+Here is an example from See [Demo\Program.cs]:
 
 ```cs
 class GitHttpBackendContext : CgiHttpContext
@@ -40,3 +40,33 @@ class GitHttpBackendContext : CgiHttpContext
     }
 }
 ```
+
+
+## Installation
+
+T.B.D.
+
+### Project Setup
+
+Your `.csproj` needs reference to framework `Microsoft.AspNetCore.App` for Kestrel related stuff (see [Demo\Demo.csproj]):
+
+```xml
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+```
+
+
+## Demo
+
+In the root directory, run:
+
+```
+cd Demo
+dotnet run
+```
+
+Then in a Web browser, navigate to `http://localhost:5001/env.fsx` to see the output of the [F# script](./Demo/script/env.fsx).
+
+[Demo\Program.cs]: .\Demo\Program.cs
+[Demo\Demo.csproj]: .\Demo\Demo.csproj

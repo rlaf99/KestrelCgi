@@ -39,9 +39,10 @@ class GitHttpBackendContext : ICgiHttpContext
     [AllowNull]
     public HttpContext HttpContext { get; set; }
 
-    public CgiExecutionInfo GetCgiExecutionInfo(ILogger? logger)
+    public CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger)
     {
         var request = HttpContext.Request;
+        var envUpdate = new Dictionary<string, string> { { "FOO", "BAR" } };
 
         if (request.Path == @"/env.bat")
         {
@@ -49,18 +50,8 @@ class GitHttpBackendContext : ICgiHttpContext
                 ScriptName: "env.bat",
                 PathInfo: "",
                 CommandPath: Path.Join(".", "script", "env.bat"),
-                CommandArgs: []
-            );
-
-            return result;
-        }
-        else if (request.Path == @"/hello.exe")
-        {
-            CgiExecutionInfo result = new(
-                ScriptName: "env.bat",
-                PathInfo: "",
-                CommandPath: Path.Join(".", "script", "hello.exe"),
-                CommandArgs: []
+                CommandArgs: [],
+                EnvironmentUpdate: envUpdate
             );
 
             return result;
@@ -71,14 +62,15 @@ class GitHttpBackendContext : ICgiHttpContext
                 ScriptName: "env.fsx",
                 PathInfo: "",
                 CommandPath: "dotnet",
-                CommandArgs: ["fsi", Path.Join(".", "script", "env.fsx")]
+                CommandArgs: ["fsi", Path.Join(".", "script", "env.fsx")],
+                EnvironmentUpdate: envUpdate
             );
 
             return result;
         }
         else
         {
-            throw new InvalidOperationException($"Unsupport request path: {request.Path}");
+            return null;
         }
     }
 }

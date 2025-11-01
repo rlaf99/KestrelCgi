@@ -12,11 +12,11 @@ public class CgiHeaders
     public string? Location { get; private set; }
     public int? Status { get; private set; }
 
-    public void TraceValues(ILogger logger)
+    public void TraceValues(ILogger? logger)
     {
-        logger.LogTrace("CGI Header: {} : {}", nameof(ContentType), ContentType);
-        logger.LogTrace("CGI Header: {} : {}", nameof(Location), Location);
-        logger.LogTrace("CGI Header: {} : {}", nameof(Status), Status);
+        logger?.LogTrace("CGI Header: {} : {}", nameof(ContentType), ContentType);
+        logger?.LogTrace("CGI Header: {} : {}", nameof(Location), Location);
+        logger?.LogTrace("CGI Header: {} : {}", nameof(Status), Status);
     }
 
     public bool TakeLine(string line)

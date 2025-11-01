@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Net.Mime;
-using System.Text;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -9,32 +7,43 @@ using static KestrelCgi.CgiRequestConstants;
 
 namespace KestrelCgi;
 
+public class InvalidCgiOutputException : Exception
+{
+    public InvalidCgiOutputException(string? message)
+        : base(message) { }
+}
+
 public record CgiExecutionInfo(
     string ScriptName,
     string PathInfo,
     string CommandPath,
-    List<string> CommandArgs
+    List<string> CommandArgs,
+    Dictionary<string, string>? EnvironmentUpdate = null
 );
 
 public interface ICgiHttpContext
 {
     HttpContext HttpContext { get; set; }
 
+    bool LogErrorOutput
+    {
+        get => false;
+    }
+
     TimeSpan ProcessingTimeout
     {
         get => TimeSpan.FromSeconds(3);
     }
 
-    CgiExecutionInfo GetCgiExecutionInfo(ILogger? logger);
+    CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger);
 }
 
-/// TODO:
-///   - is http content length really necessary?
 public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplication<TContext>
     where TContext : ICgiHttpContext, new()
 {
     const string CgiVersion11 = "CGI/1.1";
-    const string CgiServerSoftware = "KestrelCgi";
+    static readonly string CgiServerSoftware =
+        typeof(ICgiHttpContext).Assembly.GetName().Name ?? "Unknown";
 
     public TContext CreateContext(IFeatureCollection contextFeatures)
     {
@@ -68,6 +77,20 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
         await response.WriteAsync(content);
     }
 
+    public async Task Response404Async(HttpResponse response)
+    {
+        response.StatusCode = StatusCodes.Status404NotFound;
+
+        var content = $"""
+            <body>
+                <h1>Status: {StatusCodes.Status404NotFound}</h1>
+                <h2>Not Found</h2>
+            </body>
+            """;
+
+        await response.WriteAsync(content);
+    }
+
     public async Task ProcessRequestAsync(TContext context)
     {
         logger?.LogTrace("Start processing {}", context.HttpContext.Request.Path);
@@ -82,26 +105,40 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
         }
         catch (Exception ex)
         {
-            var response = context.HttpContext.Response;
+            if (context.HttpContext.RequestAborted.IsCancellationRequested == false)
+            {
+                var response = context.HttpContext.Response;
 
-            await Response500Async(response, ex.ToString());
+                await Response500Async(response, ex.ToString());
+            }
         }
 
         logger?.LogTrace("Done processing {}", context.HttpContext.Request.Path);
     }
 
-    async Task HandleCgiRequestAsync(TContext context, CancellationToken cancellation)
+    async Task HandleCgiRequestAsync(TContext context, CancellationToken timeoutToken)
     {
-        var cgiExec = context.GetCgiExecutionInfo(logger);
+        var cgiExecInfo = context.GetCgiExecutionInfo(logger);
+        if (cgiExecInfo is null)
+        {
+            await Response404Async(context.HttpContext.Response);
+
+            return;
+        }
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(
+            context.HttpContext.RequestAborted,
+            timeoutToken
+        );
 
         var request = context.HttpContext.Request;
         var response = context.HttpContext.Response;
 
-        var arguments = string.Join(" ", cgiExec.CommandArgs);
+        var arguments = string.Join(" ", cgiExecInfo.CommandArgs);
 
-        logger?.LogTrace("Execute '{}' with arguments '{}'", cgiExec.CommandPath, arguments);
+        logger?.LogTrace("Execute '{}' with arguments '{}'", cgiExecInfo.CommandPath, arguments);
 
-        ProcessStartInfo startInfo = new(cgiExec.CommandPath)
+        ProcessStartInfo startInfo = new(cgiExecInfo.CommandPath)
         {
             Arguments = arguments,
             CreateNoWindow = true,
@@ -125,8 +162,8 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
             env[REMOTE_USER] = context.HttpContext.User.Identity?.Name;
             env[AUTH_TYPE] = context.HttpContext.User.Identity?.AuthenticationType;
             env[REQUEST_METHOD] = request.Method;
-            env[SCRIPT_NAME] = cgiExec.ScriptName;
-            env[PATH_INFO] = cgiExec.PathInfo;
+            env[SCRIPT_NAME] = cgiExecInfo.ScriptName;
+            env[PATH_INFO] = cgiExecInfo.PathInfo;
             env[PATH_TRANSLATED] = null;
             env[QUERY_STRING] = request.QueryString.Value;
             env[CONTENT_TYPE] = request.ContentType;
@@ -137,18 +174,23 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
                 var name = "HTTP_" + header.Key.ToUpperInvariant().Replace('-', '_');
                 env[name] = header.Value;
             }
+
+            if (cgiExecInfo.EnvironmentUpdate is not null)
+            {
+                foreach (var (key, val) in cgiExecInfo.EnvironmentUpdate)
+                {
+                    env[key] = val;
+                }
+            }
         }
 
         using var process = new Process() { StartInfo = startInfo };
 
-        const int errorOutputCapacity = 64;
-        StringBuilder errorOutput = new(errorOutputCapacity);
-
         void ErrorDataReceiver(object sender, DataReceivedEventArgs args)
         {
-            if (errorOutput.Length < errorOutputCapacity)
+            if (context.LogErrorOutput)
             {
-                errorOutput.Append(args.Data);
+                logger?.LogError("CGI error outupt: {}", args.Data);
             }
         }
 
@@ -157,10 +199,7 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
         process.Start();
         process.BeginErrorReadLine();
 
-        if (request.ContentLength > 0)
-        {
-            request.Body.CopyTo(process.StandardInput.BaseStream);
-        }
+        await request.Body.CopyToAsync(process.StandardInput.BaseStream, cts.Token);
         process.StandardInput.Close();
 
         CgiHeaders cgiHeaders = new();
@@ -169,8 +208,8 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
         for (; ; )
         {
             var line =
-                await process.StandardOutput.ReadLineAsync(cancellation)
-                ?? throw new InvalidDataException($"Invalid output from CGI program");
+                await process.StandardOutput.ReadLineAsync(cts.Token)
+                ?? throw new InvalidCgiOutputException($"Headers not followed by new line");
 
             if (line.Length == 0)
             {
@@ -186,14 +225,11 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
             }
         }
 
-        if (logger is not null)
-        {
-            cgiHeaders.TraceValues(logger);
-        }
+        cgiHeaders.TraceValues(logger);
 
         if (cgiHeaders.Location is not null)
         {
-            throw new InvalidCastException($"{nameof(cgiHeaders.Location)} is not supported");
+            throw new NotImplementedException($"{nameof(cgiHeaders.Location)} is not supported");
         }
 
         if (cgiHeaders.Status is not null)
@@ -210,22 +246,22 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
             response.Headers.Append(name, value);
         }
 
-        // process.StandardOutput.BaseStream.CopyTo(response.Body);
-        await response.WriteAsync(process.StandardOutput.ReadToEnd() ?? string.Empty, cancellation);
+        if (cgiHeaders.ContentType is not null)
+        {
+            response.Headers.ContentType = cgiHeaders.ContentType;
+        }
 
-        await process.WaitForExitAsync(cancellation);
+        await response.StartAsync(cts.Token);
+
+        await process.StandardOutput.BaseStream.CopyToAsync(response.Body, cts.Token);
+
+        await process.WaitForExitAsync(cts.Token);
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidDataException(
+            throw new InvalidCgiOutputException(
                 $"CGI program exited with non-zero ({process.ExitCode})"
             );
-        }
-
-        if (errorOutput.Length != 0)
-        {
-            var errorMessage = errorOutput.ToString();
-            throw new InvalidDataException($"CGI program produces error output: {errorMessage}");
         }
     }
 
@@ -234,7 +270,7 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
         var colonIndex = line.IndexOf(':');
         if (colonIndex == -1)
         {
-            throw new InvalidDataException($"Cannot find ':' in the header");
+            throw new InvalidCgiOutputException($"Cannot find ':' in the header");
         }
 
         var name = line[..colonIndex];

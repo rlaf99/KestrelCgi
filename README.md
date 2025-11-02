@@ -4,16 +4,38 @@ KestrelCgi implements a simple CGI server directly on top of Kestrel.
 
 ## How it works
 
-Derive from the abstract class `CgiHttpContext` and implement `GetCgiExecutionInfo` to provide `CgiExecutionInfo` to `CgiHttpContext`. `CgiExecutionInfo` gives necessary information on how to execute a CGI program.
+An example is provided in [Demo\Program.cs]:
 
-Here is an example from See [Demo\Program.cs]:
+
+First, implement `ICgiHttpContent`:
 
 ```cs
-class GitHttpBackendContext : CgiHttpContext
+class ExampleCgiContext : ICgiHttpContext
 {
-    public override CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger)
+    public required HttpContext HttpContext { get; set; }
+
+    public bool LogErrorOutput { get; set; } = true;
+
+    public TimeSpan ProcessingTimeout { get; set; } = TimeSpan.FromSeconds(3);
+}
+```
+
+Then, derive from the abstract class `CgiHttpApplication` and implement `GetCgiExecutionInfo` to provide `CgiExecutionInfo` which gives necessary information on how to execute a CGI program:
+
+
+```cs
+class ExampleCgiServer(ILogger? logger = null) : CgiHttpApplication<ExampleCgiContext>(logger)
+{
+    public override ExampleCgiContext CreateContext(IFeatureCollection contextFeatures)
     {
-        var request = HttpContext.Request;
+        ExampleCgiContext context = new() { HttpContext = new DefaultHttpContext(contextFeatures) };
+
+        return context;
+    }
+
+    public override CgiExecutionInfo? GetCgiExecutionInfo(ExampleCgiContext context)
+    {
+        var request = context.HttpContext.Request;
 
         if (request.Path.StartsWithSegments(@"/env.fsx"))
         {
@@ -37,6 +59,13 @@ class GitHttpBackendContext : CgiHttpContext
         }
     }
 }
+```
+
+Now it can be run on a `KestrelServer`:
+
+```cs
+KestrelServer server = new(/*...*/);
+server.StartAsync(new ExampleCgiServer(), CancellationToken.None);
 ```
 
 

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -17,30 +16,26 @@ public record CgiExecutionInfo(
     Dictionary<string, string>? EnvironmentUpdate = null
 );
 
-public abstract class CgiHttpContext
+public interface ICgiHttpContext
 {
-    public required HttpContext HttpContext { get; set; }
+    HttpContext HttpContext { get; }
 
-    public bool LogErrorOutput { get; set; } = false;
+    bool LogErrorOutput { get; }
 
-    public TimeSpan ProcessingTimeout { get; set; } = TimeSpan.FromSeconds(3);
-
-    public abstract CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger);
+    TimeSpan ProcessingTimeout { get; }
 }
 
-public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplication<TContext>
-    where TContext : CgiHttpContext, new()
+public abstract class CgiHttpApplication<TContext>(ILogger? logger = null)
+    : IHttpApplication<TContext>
+    where TContext : ICgiHttpContext
 {
     const string CgiVersion11 = "CGI/1.1";
     static readonly string CgiServerSoftware =
-        typeof(CgiHttpContext).Assembly.GetName().Name ?? "Unknown";
+        typeof(ICgiHttpContext).Assembly.GetName().Name ?? "Unknown";
 
-    public TContext CreateContext(IFeatureCollection contextFeatures)
-    {
-        var context = new TContext() { HttpContext = new DefaultHttpContext(contextFeatures) };
+    public abstract CgiExecutionInfo? GetCgiExecutionInfo(TContext context);
 
-        return context;
-    }
+    public abstract TContext CreateContext(IFeatureCollection contextFeatures);
 
     public void DisposeContext(TContext context, Exception? exception)
     {
@@ -108,7 +103,7 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
 
     async Task HandleCgiRequestAsync(TContext context, CancellationToken timeoutToken)
     {
-        var cgiExecInfo = context.GetCgiExecutionInfo(logger);
+        var cgiExecInfo = GetCgiExecutionInfo(context);
         if (cgiExecInfo is null)
         {
             await Response404Async(context.HttpContext.Response);
@@ -180,7 +175,7 @@ public class CgiHttpApplication<TContext>(ILogger? logger = null) : IHttpApplica
 
         void ErrorDataReceiver(object sender, DataReceivedEventArgs args)
         {
-            if (context.LogErrorOutput)
+            if (context.LogErrorOutput && args.Data is not null)
             {
                 logger?.LogError("CGI error outupt: {}", args.Data);
             }

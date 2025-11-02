@@ -19,18 +19,11 @@ public record CgiExecutionInfo(
 
 public abstract class CgiHttpContext
 {
-    [AllowNull]
-    public HttpContext HttpContext { get; set; }
+    public required HttpContext HttpContext { get; set; }
 
-    public bool LogErrorOutput
-    {
-        get => false;
-    }
+    public bool LogErrorOutput { get; set; } = false;
 
-    public TimeSpan ProcessingTimeout
-    {
-        get => TimeSpan.FromSeconds(3);
-    }
+    public TimeSpan ProcessingTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
     public abstract CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger);
 }

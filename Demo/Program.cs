@@ -1,6 +1,6 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using KestrelCgi;
+﻿using KestrelCgi;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets;
 using Microsoft.Extensions.Logging;
@@ -15,8 +15,9 @@ using var loggerFactory = LoggerFactory.Create(builder =>
     builder.AddDebug();
 });
 
+const int port = 5001;
 KestrelServerOptions serverOptions = new();
-serverOptions.ListenLocalhost(5001);
+serverOptions.ListenLocalhost(port);
 
 SocketTransportOptions transportOptions = new();
 
@@ -26,21 +27,35 @@ var server = new KestrelServer(
     loggerFactory
 );
 
-var cgiHttpLogger = loggerFactory.CreateLogger<CgiHttpApplication<GitHttpBackendContext>>();
-CgiHttpApplication<GitHttpBackendContext> cgiHttp = new(cgiHttpLogger);
+var cgiHttpLogger = loggerFactory.CreateLogger<ExampleCgiServer>();
+ExampleCgiServer cgiHttp = new(cgiHttpLogger);
 
+Console.Out.WriteLine($"Listening on {port}");
 await server.StartAsync(cgiHttp, CancellationToken.None);
 await shutDown.Task;
 await server.StopAsync(CancellationToken.None);
 
-class GitHttpBackendContext : ICgiHttpContext
+class ExampleCgiContext : ICgiHttpContext
 {
-    [AllowNull]
-    public HttpContext HttpContext { get; set; }
+    public required HttpContext HttpContext { get; set; }
 
-    public CgiExecutionInfo? GetCgiExecutionInfo(ILogger? logger)
+    public bool LogErrorOutput { get; set; } = true;
+
+    public TimeSpan ProcessingTimeout { get; set; } = TimeSpan.FromSeconds(3);
+}
+
+class ExampleCgiServer(ILogger? logger = null) : CgiHttpApplication<ExampleCgiContext>(logger)
+{
+    public override ExampleCgiContext CreateContext(IFeatureCollection contextFeatures)
     {
-        var request = HttpContext.Request;
+        ExampleCgiContext context = new() { HttpContext = new DefaultHttpContext(contextFeatures) };
+
+        return context;
+    }
+
+    public override CgiExecutionInfo? GetCgiExecutionInfo(ExampleCgiContext context)
+    {
+        var request = context.HttpContext.Request;
 
         if (request.Path == @"/env.bat")
         {

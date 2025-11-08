@@ -13,6 +13,7 @@
     <PackageDescription>Simple Kestrel-based CGI Server, for demonstration and testing.</PackageDescription>
     <PackageProjectUrl>https://github.com/rlaf99/KestrelCgi</PackageProjectUrl>
     <PackageTags>Kestrel CGI</PackageTags>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
@@ -21,6 +22,7 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
+    <None Include="..\LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

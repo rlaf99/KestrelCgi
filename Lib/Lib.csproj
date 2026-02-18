@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
-    <VersionPrefix>0.0.1</VersionPrefix>
+    <VersionPrefix>0.0.2</VersionPrefix>
     <Authors>R'laf | 阿乐夫</Authors>
     <Title>Simple Kestrel-based CGI Server</Title>
     <PackageId>KestrelCgi</PackageId>

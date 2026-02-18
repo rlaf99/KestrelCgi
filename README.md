@@ -78,6 +78,12 @@ dotnet run
 
 Then in a Web browser, navigate to `http://localhost:5001/env.fsx` to see the output of the [F# script](./Demo/script/env.fsx).
 
+Futhermore, the repository is served by `git http-backend` at `http://127.0.0.1:5001/git` which can be cloned like:
+
+```
+git clone http://127.0.0.1:5001/git/ new_repo
+```
+
 ## Installation
 
 Install the nuget package:

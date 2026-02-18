@@ -84,9 +84,43 @@ class ExampleCgiServer(ILogger? logger = null) : CgiHttpApplication<ExampleCgiCo
 
             return result;
         }
+        else if (request.Path.StartsWithSegments(@"/git"))
+        {
+            const string scriptName = @"/git";
+            var pathInfo = request.Path.Value![scriptName.Length..];
+            var envUpdate = new Dictionary<string, string>
+            {
+                ["GIT_PROJECT_ROOT"] = GetProjectRoot(),
+                ["GIT_HTTP_EXPORT_ALL"] = "1",
+            };
+
+            CgiExecutionInfo result = new(
+                ScriptName: scriptName,
+                PathInfo: pathInfo,
+                CommandPath: "git",
+                CommandArgs: ["http-backend"],
+                EnvironmentUpdate: envUpdate
+            );
+            return result;
+        }
         else
         {
             return null;
         }
+    }
+
+    public static string GetProjectRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (dir != null)
+        {
+            if (dir.GetFiles("*.sln").Any())
+                return dir.FullName;
+
+            dir = dir.Parent;
+        }
+
+        throw new Exception("Repository root not found.");
     }
 }

@@ -189,30 +189,9 @@ public abstract class CgiHttpApplication<TContext>(ILogger? logger = null)
         await request.Body.CopyToAsync(process.StandardInput.BaseStream, cts.Token);
         process.StandardInput.Close();
 
-        CgiHeaders cgiHeaders = new();
-        Dictionary<string, string> responseHeaders = [];
+        CgiHeaders cgiHeaders = new(logger);
 
-        for (; ; )
-        {
-            var line =
-                await process.StandardOutput.ReadLineAsync(cts.Token)
-                ?? throw new InvalidCgiOutputException($"Headers not followed by new line");
-
-            if (line.Length == 0)
-            {
-                break;
-            }
-
-            if (cgiHeaders.TakeLine(line) == false)
-            {
-                var (name, value) = ParseHeader(line);
-                responseHeaders.Add(name, value);
-
-                logger?.LogTrace("HTTP header from CGI response: '{}' : '{}'", name, value);
-            }
-        }
-
-        cgiHeaders.TraceValues(logger);
+        cgiHeaders.Parse(process.StandardOutput.BaseStream);
 
         if (cgiHeaders.Location is not null)
         {
@@ -228,7 +207,7 @@ public abstract class CgiHttpApplication<TContext>(ILogger? logger = null)
             response.StatusCode = StatusCodes.Status200OK;
         }
 
-        foreach (var (name, value) in responseHeaders)
+        foreach (var (name, value) in cgiHeaders.ResponseHeaders)
         {
             response.Headers.Append(name, value);
         }
@@ -246,9 +225,7 @@ public abstract class CgiHttpApplication<TContext>(ILogger? logger = null)
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidCgiOutputException(
-                $"CGI program exited with non-zero ({process.ExitCode})"
-            );
+            logger?.LogError("CGI program exited with non-zero ({})", process.ExitCode);
         }
     }
 

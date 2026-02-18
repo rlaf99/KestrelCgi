@@ -1,73 +1,9 @@
-using Microsoft.Extensions.Logging;
-
 namespace KestrelCgi;
 
 public class InvalidCgiOutputException : Exception
 {
     public InvalidCgiOutputException(string? message)
         : base(message) { }
-}
-
-public class CgiHeaders
-{
-    const string ContentTypeLineStart = "Content-Type:";
-    const string StatusLineStart = "Status:";
-    const string LocationLineStart = "Location:";
-
-    public string? ContentType { get; private set; }
-    public string? Location { get; private set; }
-    public int? Status { get; private set; }
-
-    public void TraceValues(ILogger? logger)
-    {
-        logger?.LogTrace("CGI Header: {} : {}", nameof(ContentType), ContentType);
-        logger?.LogTrace("CGI Header: {} : {}", nameof(Location), Location);
-        logger?.LogTrace("CGI Header: {} : {}", nameof(Status), Status);
-    }
-
-    public bool TakeLine(string line)
-    {
-        if (line.StartsWith(ContentTypeLineStart))
-        {
-            if (ContentType is not null)
-            {
-                throw new InvalidCgiOutputException($"{nameof(ContentType)} already present");
-            }
-            ContentType = line[ContentTypeLineStart.Length..].TrimStart();
-
-            return true;
-        }
-        else if (line.StartsWith(LocationLineStart))
-        {
-            if (Location is not null)
-            {
-                throw new InvalidCgiOutputException($"{nameof(Location)} already present");
-            }
-            Location = line[LocationLineStart.Length..].TrimStart();
-
-            return true;
-        }
-        else if (line.StartsWith(StatusLineStart))
-        {
-            if (Status is not null)
-            {
-                throw new InvalidCgiOutputException($"{nameof(Status)} already present");
-            }
-            var statusInfo = line[StatusLineStart.Length..].TrimStart();
-            var statusCodeInfo = statusInfo.Split(' ')[0];
-            if (int.TryParse(statusCodeInfo, out var statusCode) == false)
-            {
-                throw new InvalidCgiOutputException($"Invalid {line}");
-            }
-            Status = statusCode;
-
-            return true;
-        }
-        else
-        {
-            return false;
-        }
-    }
 }
 
 static class CgiRequestConstants
